@@ -1,25 +1,31 @@
 
 export default async function handler(req, res) {
-  // Разрешаем только POST-запросы
   if (req.method !== "POST") {
     return res.status(405).json({
       error: "Используй POST-запрос"
     });
   }
 
-  // Проверяем настройки API
-  const apiKey = process.env.AI_API_KEY;
-  const baseUrl = process.env.AI_BASE_URL;
-  const model = process.env.AI_MODEL;
-
-  if (!apiKey || !baseUrl || !model) {
-    return res.status(500).json({
-      error: "Quantum не настроен. Проверь переменные Vercel."
-    });
-  }
+  const configs = {
+    flash: {
+      key: process.env.FLASH_API_KEY,
+      url: process.env.FLASH_BASE_URL,
+      model: process.env.FLASH_MODEL
+    },
+    genesis: {
+      key: process.env.AI_API_KEY,
+      url: process.env.AI_BASE_URL,
+      model: process.env.AI_MODEL
+    },
+    infinity: {
+      key: process.env.INFINITY_API_KEY,
+      url: process.env.INFINITY_BASE_URL,
+      model: process.env.INFINITY_MODEL
+    }
+  };
 
   try {
-    const { messages } = req.body || {};
+    const { messages, version = "genesis" } = req.body || {};
 
     if (!Array.isArray(messages)) {
       return res.status(400).json({
@@ -27,25 +33,38 @@ export default async function handler(req, res) {
       });
     }
 
-    // Оставляем только последние 30 сообщений
+    const config = configs[version];
+
+    if (!config) {
+      return res.status(400).json({
+        error: "Неизвестная версия Quantum."
+      });
+    }
+
+    if (!config.key || !config.url || !config.model) {
+      return res.status(500).json({
+        error: `Quantum ${version} не настроен в Vercel.`
+      });
+    }
+
     const safeMessages = messages
       .filter(m =>
         m &&
         ["user", "assistant"].includes(m.role) &&
         typeof m.content === "string"
       )
-      .slice(-30);
+      .slice(-70);
 
     const response = await fetch(
-      `${baseUrl.replace(/\/+$/, "")}/chat/completions`,
+      `${config.url.replace(/\/+$/, "")}/chat/completions`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${config.key}`
         },
         body: JSON.stringify({
-          model,
+          model: config.model,
           messages: [
             {
               role: "system",
@@ -83,4 +102,4 @@ export default async function handler(req, res) {
       error: "Ошибка сервера Quantum."
     });
   }
-      }
+}
